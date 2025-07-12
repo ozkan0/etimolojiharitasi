@@ -1,0 +1,178 @@
+:root {
+    --primary-color: #005f73;
+    --secondary-color: #0a9396;
+    --background-color: #f8f9fa;
+    --text-color: #343a40;
+    --sidebar-width: 380px;
+    --detail-panel-width: 400px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body, html {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text-color);
+    overflow: hidden;
+    height: 100%;
+}
+
+#app-container {
+    height: 100%;
+    position: relative;
+    background-color: #e9ecef;
+}
+
+/* --- Sol Panel (Sidebar) --- */
+#sidebar {
+    position: absolute; /* <-- YENİ: Haritanın üzerine yerleştirir */
+    top: 0;             /* <-- YENİ */
+    left: 0;            /* <-- YENİ */
+    height: 100%;       /* <-- YENİ */
+
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background-color: #fff;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.35s ease; /* <-- DEĞİŞTİ: Artık 'transform'u animate ediyoruz */
+    z-index: 1001;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+}
+
+#sidebar.collapsed {
+    transform: translateX(-100%); /* <-- DEĞİŞTİ: Menüyü ekran dışına kaydırır */
+    /* margin-left: ... <-- BU SATIRI SİLİN */
+}
+#sidebar header { background-color: var(--primary-color); color: white; padding: 1rem 1.5rem; flex-shrink: 0; }
+#sidebar .controls { padding: 1rem 1.5rem; border-bottom: 1px solid #dee2e6; background-color: var(--background-color); }
+#search-box, .filters select { width: 100%; padding: 0.75rem; border: 1px solid #ced4da; border-radius: 5px; font-size: 1rem; }
+#search-box { margin-bottom: 0.75rem; }
+.filters { display: flex; gap: 0.75rem; }
+#word-list-container { padding: 1rem; overflow-y: auto; flex-grow: 1; }
+.word-item { padding: 0.8rem 0.5rem; border-bottom: 1px solid #e9ecef; cursor: pointer; transition: background-color 0.2s; }
+.word-item:hover { background-color: #f1f3f5; }
+.word-item .word { font-weight: bold; font-size: 1.1rem; color: var(--secondary-color); }
+.word-item .origin { font-size: 0.9rem; color: #6c757d; }
+
+/* --- Orta Alan (Harita) --- */
+#map-area {
+    position: relative;
+    height: 100%;
+}
+#map { height: 100%; width: 100%; z-index: 1; }
+
+
+#toggle-sidebar {
+    position: absolute; /* Konumu #app-container'a göre ayarlar */
+    top: 50%;
+    transform: translateY(-50%);
+    left: var(--sidebar-width); /* Yan menü açıkken onun sağ kenarında başlar */
+    
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-left: none; /* Yan menüye yapışık görünmesi için sol kenarlığı kaldırır */
+    border-radius: 0 5px 5px 0;
+    padding: 15px 8px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.15);
+    z-index: 1002;
+
+    /* Düğmenin yumuşakça hareket etmesi için transition */
+    transition: left 0.35s ease, background-color 0.2s, color 0.2s;
+}
+
+#toggle-sidebar:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Yan menü kapandığında düğmenin yeni konumu */
+#sidebar.collapsed ~ #map-area #toggle-sidebar {
+    left: 0;
+}
+
+/* --- Sağ Detay Paneli --- */
+#detail-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: var(--detail-panel-width);
+    height: 100vh;
+    background-color: #fff;
+    box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+    transform: translateX(100%);
+    transition: transform 0.35s ease;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+}
+#detail-panel.visible { transform: translateX(0); }
+#detail-panel header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--secondary-color);
+    color: white;
+    padding: 1rem 1.5rem;
+    flex-shrink: 0;
+}
+#detail-panel header h2 { font-size: 1.3rem; }
+#close-detail-panel { background: none; border: none; color: white; font-size: 1.8rem; cursor: pointer; opacity: 0.8; }
+#close-detail-panel:hover { opacity: 1; }
+#detail-content { padding: 1.5rem; overflow-y: auto; flex-grow: 1; }
+.detail-section { margin-bottom: 1.5rem; }
+.detail-section h3 { border-bottom: 2px solid var(--secondary-color); padding-bottom: 0.5rem; margin-bottom: 1rem; color: var(--primary-color); }
+.detail-section p, .detail-section ul { line-height: 1.7; }
+.detail-section ul { list-style-position: inside; padding-left: 0.5rem; }
+
+/* --- Popup içindeki detay butonu --- */
+.detail-button {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.detail-button:hover { background-color: var(--primary-color); }
+
+/* --- Harita Üzerindeki Kelime Stilleri (YENİ, YÜKSEK KONTRASTLI VERSİYON) --- */
+.word-marker {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 18px;
+    font-weight: normal; 
+    
+    /* YENİ, ZENGİN BORDO RENGİ */
+    color: #ff0000; 
+    
+    cursor: pointer;
+    white-space: nowrap;
+    
+    /* Okunurluk için beyaz hale efekti korunuyor */
+    text-shadow: 
+        -1px -1px 1px #fff,  
+         1px -1px 1px #fff,
+        -1px  1px 1px #fff,
+         1px  1px 1px #fff;
+    
+    padding: 2px 5px;
+    transition: transform 0.2s ease-out, color 0.2s;
+
+    /* Leaflet'in varsayılan icon stillerini sıfırlama */
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.word-marker:hover {
+    transform: scale(1.15);
+    /* Üzerine gelince rengi biraz daha koyulaştır */
+    color: #661414; 
+    z-index: 9999 !important;
+}

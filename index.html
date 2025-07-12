@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gelişmiş Etimoloji Haritası</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="app-container">
+        <!-- Sol Panel: Filtreler, Arama ve Kelime Listesi -->
+        <aside id="sidebar">
+            <header>
+                <h1>Etimoloji Haritası</h1>
+            </header>
+            
+            <div class="controls">
+                <input type="search" id="search-box" placeholder="Kelime ara...">
+                <div class="filters">
+                    <select id="lang-filter">
+                        <option value="all">Tüm Diller</option>
+                    </select>
+                    <select id="period-filter">
+                        <option value="all">Tüm Dönemler</option>
+                        <option value="Osmanlı Öncesi">Osmanlı Öncesi</option>
+                        <option value="Osmanlı">Osmanlı</option>
+                        <option value="Cumhuriyet">Cumhuriyet</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="word-list-container"></div>
+        </aside>
+
+        <!-- Orta Alan: Harita ve Ana Kontrol Butonu -->
+        <main id="map-area">
+            <button id="toggle-sidebar" title="Menüyü Gizle/Göster">✕</button>
+            <div id="map"></div>
+        </main>
+
+        <!-- Sağ Panel: Detaylı Bilgi Penceresi (Başlangıçta gizli) -->
+        <aside id="detail-panel">
+            <header>
+                <h2 id="detail-title">Detaylar</h2>
+                <button id="close-detail-panel" title="Detayları Kapat">✕</button>
+            </header>
+            <div id="detail-content">
+                <!-- Detaylı bilgiler buraya yüklenecek -->
+            </div>
+        </aside>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
