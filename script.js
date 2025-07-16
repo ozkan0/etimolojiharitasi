@@ -63,15 +63,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).setView([45, 20], 3.5);
     L.control.zoom({ position: 'topright' }).addTo(map); 
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+ // YENİ 'POSITRON' TEMASI (Bunu yapıştırın)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+	attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 19
+}).addTo(map);
 
     let countryPolygons = {};
     let wordMarkersLayer = L.layerGroup().addTo(map);
     let visibleWordMarkers = {};
-    // DEĞİŞİKLİK 1: GEÇİCİ/ODAKLANILAN KELİME İÇİN YENİ BİR KATMAN OLUŞTURULDU
+    // GEÇİCİ/ODAKLANILAN KELİME İÇİN YENİ BİR KATMAN OLUŞTURULDU
     let focusedWordLayer = L.layerGroup().addTo(map);
+    let wordCoordinates = {}; //Kelime koordinatlarını saklamak için yeni bir obje
 
     const sidebar = document.getElementById('sidebar');
     const toggleButton = document.getElementById('toggle-sidebar');
@@ -100,72 +104,160 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hideDetailPanel = () => { detailPanel.classList.remove('visible'); };
 
     const renderWordsOnMap = (words) => {
-        wordMarkersLayer.clearLayers(); visibleWordMarkers = {};
-        // DEĞİŞİKLİK 2: FİLTRELEME YAPILDIĞINDA GEÇİCİ KELİME DE TEMİZLENİR
-        focusedWordLayer.clearLayers();
-        const wordsByCountry = {}; words.forEach(word => { if (!wordsByCountry[word.country_code]) { wordsByCountry[word.country_code] = []; } wordsByCountry[word.country_code].push(word); });
-        for (const code in wordsByCountry) {
-            if (!countryPolygons[code]) continue;
-            const countryWords = wordsByCountry[code];
-            const randomSelection = [...countryWords].sort(() => 0.5 - Math.random()).slice(0, 1);
-            randomSelection.forEach(word => {
-                const randomCoords = getRandomPointInCountry(code);
-                if (randomCoords) {
-                    const icon = L.divIcon({ className: 'word-marker', html: word.word });
-                    const marker = L.marker(randomCoords, { icon: icon }).addTo(wordMarkersLayer);
-                    marker.bindPopup(`<div class="popup-title">${word.word}</div><div class="popup-info"><strong>Köken:</strong> ${word.origin_lang}</div><p class="popup-example">${word.example || ''}</p><button class="detail-button" data-word="${word.word}">Detayları Gör</button>`);
-                    visibleWordMarkers[word.word] = marker;
-                }
-            });
+    wordMarkersLayer.clearLayers();
+    visibleWordMarkers = {};
+    focusedWordLayer.clearLayers();
+
+    const wordsByCountry = {};
+    words.forEach(word => {
+        if (!wordsByCountry[word.country_code]) {
+            wordsByCountry[word.country_code] = [];
         }
-    };
+        wordsByCountry[word.country_code].push(word);
+    });
 
-    const updateWordList = (words) => {
-        wordListContainer.innerHTML = ''; if (words.length === 0) { wordListContainer.innerHTML = '<p style="padding: 1rem;">Sonuç bulunamadı.</p>'; return; }
-        words.forEach(word => {
-            const item = document.createElement('div'); item.className = 'word-item';
-            item.innerHTML = `<div class="word">${word.word}</div><div class="origin">${word.origin_lang} / ${word.period}</div>`;
-            
-            // DEĞİŞİKLİK 3: TIKLAMA MANTIĞI GÜNCELLENDİ
-            item.addEventListener('click', (event) => {
-                event.preventDefault();
+    for (const code in wordsByCountry) {
+        if (!countryPolygons[code]) continue;
+        const countryWords = wordsByCountry[code];
+        const randomSelection = [...countryWords].sort(() => 0.5 - Math.random()).slice(0, 1);
+
+        randomSelection.forEach(word => {
+            const randomCoords = getRandomPointInCountry(code);
+            if (randomCoords) {
+                //sabit L.divIcon marker
+                const icon = L.divIcon({
+                    className: 'word-marker', // CSS stilimizi uygula
+                    html: `<span>${word.word}</span>` // Kelimeyi bir span içine alıyoruz
+                });
                 
-                const markerOnMap = visibleWordMarkers[word.word];
+                const marker = L.marker(randomCoords, { icon: icon });
+                marker.bindPopup(`<div class="popup-title">${word.word}</div><div class="popup-info"><strong>Köken:</strong> ${word.origin_lang}</div><p class="popup-example">${word.example || ''}</p><button class="detail-button" data-word="${word.word}">Detayları Gör</button>`);
+                
+                marker.addTo(wordMarkersLayer);
+                visibleWordMarkers[word.word] = marker;
+            }
+        });
+    }
+    // Kelimeler eklendikten sonra boyutlarını güncelle
+    updateWordSizes();
+};
+const WordLabel = L.Layer.extend({
+    initialize: function (latlng, wordData, options) {
+        this._latlng = latlng;
+        this._wordData = wordData;
+        L.Util.setOptions(this, options);
+    },
 
-                // Durum 1: Kelime zaten haritada görünüyorsa
-                if (markerOnMap) {
-                    focusedWordLayer.clearLayers();
-                    map.flyTo(markerOnMap.getLatLng(), 8);
-                    markerOnMap.openPopup();
-                } 
-                // Durum 2: Kelime haritada görünmüyorsa (YENİ MANTIK)
-                else {
-                    focusedWordLayer.clearLayers(); // Önceki geçici kelimeyi temizle
+    onAdd: function (map) {
+        this._map = map;
+        if (!this._container) {
+            this._initContainer();
+        }
+        this.getPane().appendChild(this._container);
+        this._updatePosition();
+        map.on('viewreset zoom', this._updatePosition, this);
+    },
+
+    onRemove: function (map) {
+        this.getPane().removeChild(this._container);
+        map.off('viewreset zoom', this._updatePosition, this);
+    },
+
+    _initContainer: function () {
+        this._container = L.DomUtil.create('div', 'word-marker-container');
+        const label = L.DomUtil.create('div', 'word-marker', this._container);
+        label.innerHTML = this._wordData.word;
+        
+        // Etikete tıklandığında popup'ı aç
+        L.DomEvent.on(label, 'click', (e) => {
+            L.DomEvent.stop(e); // Haritaya tıklama olayının gitmesini engelle
+            const popupContent = `<div class="popup-title">${this._wordData.word}</div><div class="popup-info"><strong>Köken:</strong> ${this._wordData.origin_lang}</div><p class="popup-example">${this._wordData.example || ''}</p><button class="detail-button" data-word="${this._wordData.word}">Detayları Gör</button>`;
+            L.popup()
+                .setLatLng(this._latlng)
+                .setContent(popupContent)
+                .openOn(this._map);
+        });
+    },
+
+    _updatePosition: function () {
+        const pos = this._map.latLngToLayerPoint(this._latlng);
+        L.DomUtil.setPosition(this._container, pos);
+    }
+});
+    const updateWordList = (words) => {
+    wordListContainer.innerHTML = '';
+    if (words.length === 0) {
+        wordListContainer.innerHTML = '<p style="padding: 1rem;">Sonuç bulunamadı.</p>';
+        return;
+    }
+    words.forEach(word => {
+        const item = document.createElement('div');
+        item.className = 'word-item';
+        item.innerHTML = `<div class="word">${word.word}</div><div class="origin">${word.origin_lang} / ${word.period}</div>`;
+
+        item.addEventListener('click', (event) => {
+            event.preventDefault();
+            const markerOnMap = visibleWordMarkers[word.word];
+
+            // TIKLAMA MANTIĞI KOORDİNAT ÖNBELLEĞİ İLE GÜNCELLENDİ
+            if (markerOnMap) {
+                focusedWordLayer.clearLayers();
+                map.flyTo(markerOnMap.getLatLng(), 8);
+                markerOnMap.openPopup();
+            } else {
+                focusedWordLayer.clearLayers();
+                const wordData = etymologyData.find(w => w.word === word.word);
+
+                if (wordData) {
+                    // Bu kelime için zaten bir koordinat oluşturulmuş mu diye kontrol et
+                    let coords = wordCoordinates[wordData.word];
+
+                    // Eğer koordinat yoksa, YENİ BİR TANE OLUŞTUR VE SAKLA.
+                    if (!coords) {
+                        coords = getRandomPointInCountry(wordData.country_code);
+                        wordCoordinates[wordData.word] = coords; // Gelecekteki tıklamalar için sakla
+                    }
                     
-                    const wordData = etymologyData.find(w => w.word === word.word);
-                    if (wordData) {
-                        const coords = getRandomPointInCountry(wordData.country_code);
-                        if (coords) {
-                            const icon = L.divIcon({ className: 'word-marker', html: wordData.word });
-                            const tempMarker = L.marker(coords, { icon: icon });
-                            tempMarker.bindPopup(`<div class="popup-title">${wordData.word}</div><div class="popup-info"><strong>Köken:</strong> ${wordData.origin_lang}</div><p class="popup-example">${wordData.example || ''}</p><button class="detail-button" data-word="${wordData.word}">Detayları Gör</button>`);
-                            tempMarker.addTo(focusedWordLayer);
-                            map.flyTo(coords, 8);
-                            tempMarker.openPopup();
-                        }
+                    // Saklanan veya yeni oluşturulan koordinatı kullan.
+                    if (coords) {
+                        const icon = L.divIcon({
+                            className: 'word-marker',
+                            html: `<span>${wordData.word}</span>`
+                        });
+                        const tempMarker = L.marker(coords, { icon: icon });
+                        tempMarker.bindPopup(`<div class="popup-title">${wordData.word}</div><div class="popup-info"><strong>Köken:</strong> ${wordData.origin_lang}</div><p class="popup-example">${wordData.example || ''}</p><button class="detail-button" data-word="${wordData.word}">Detayları Gör</button>`);
+                        
+                        tempMarker.addTo(focusedWordLayer);
+                        map.flyTo(coords, 8);
+                        tempMarker.openPopup();
+                        updateWordSizes();
                     }
                 }
-            });
-            wordListContainer.appendChild(item);
+            }
         });
-    };
+        wordListContainer.appendChild(item);
+    });
+};
     
     const applyFilters = () => {
+        wordCoordinates = {}; // Yeni filtrelemede eski koordinatları sıfırla
         const searchTerm = searchBox.value.toLowerCase().trim(); const selectedLang = langFilter.value; const selectedPeriod = periodFilter.value;
         const filteredWords = etymologyData.filter(w => w.word.toLowerCase().includes(searchTerm) && (selectedLang === 'all' || w.origin_lang === selectedLang) && (selectedPeriod === 'all' || w.period === selectedPeriod));
         renderWordsOnMap(filteredWords); updateWordList(filteredWords);
     };
 
+    const updateWordSizes = () => {
+        const zoom = map.getZoom();
+        // Yakınlaşma seviyesine göre bir yazı boyutu hesapla. Bu formülü istediğiniz gibi ayarlayabilirsiniz.
+        // Örnek: Zoom 3'te 12px, zoom 8'de 22px olacak şekilde.
+        const newSize = 8 + (zoom * 1.5); 
+        const clampedSize = Math.max(8, Math.min(24, newSize)); // Boyutun 10px'den küçük, 24px'den büyük olmasını engelle
+
+        // Haritadaki tüm kelimelerin yazı boyutunu güncelle
+        document.querySelectorAll('.word-marker span').forEach(el => {
+            el.style.fontSize = clampedSize + 'px';
+        });
+    };
     try {
         const response = await fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json');
         const geojsonData = await response.json();
@@ -178,9 +270,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     toggleButton.addEventListener('click', () => { sidebar.classList.toggle('collapsed'); toggleButton.innerHTML = sidebar.classList.contains('collapsed') ? '☰' : '✕'; setTimeout(() => map.invalidateSize(), 350); });
     closeDetailPanel.addEventListener('click', hideDetailPanel);
 
-    // DEĞİŞİKLİK 4: POPUP KAPANDIĞINDA GEÇİCİ KELİMEYİ TEMİZLEME
+
+        // POPUP KAPANDIĞINDA GEÇİCİ KELİMEYİ TEMİZLEME
     map.on('popupclose', (e) => {
-        if (focusedWordLayer.hasLayer(e.popup._source)) {
+        // Eğer 'focusedWordLayer' katmanında herhangi bir etiket varsa, onu temizle.
+        if (focusedWordLayer.getLayers().length > 0) {
             focusedWordLayer.clearLayers();
         }
     });
@@ -198,6 +292,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchBox.addEventListener('input', applyFilters);
     langFilter.addEventListener('change', applyFilters);
     periodFilter.addEventListener('change', applyFilters);
-    
+    map.on('zoomend', updateWordSizes); // Her zoom bittiğinde boyutları güncelle
+    applyFilters(); // İlk yüklemede kelimeleri oluştur
+    updateWordSizes(); // Ve ilk boyutları ayarla
     applyFilters();
 });
